@@ -19,7 +19,6 @@ go.mod.bak
 Thumbs.db
 
 # 输出目录
-output/
 temp/
 
 # 备份文件
@@ -43,8 +42,4 @@ testdata/
 # Docker 构建缓存
 dockerfile.bak
 
-# Excel 测试数据 (保留目录结构但忽略文件)
-File/*.xls
-File/*.xlsx
-File/.DS_Store
 
