@@ -1,4 +1,4 @@
-package main
+package service
 
 import (
 	"sort"
@@ -7,7 +7,7 @@ import (
 )
 
 // 生成 result.xlsx：差异行整红字，W 列写差值，按 E列对接设计师第一个名字和 G列执行设计师排序
-func writeResultXLSX(outPath string, header []string, rows [][]string, diffs []float64) error {
+func WriteResultXLSX(outPath string, header []string, rows [][]string, diffs []float64) error {
 	f := excelize.NewFile()
 	sheet := "Sheet1"
 	if _, err := f.NewSheet(sheet); err != nil {

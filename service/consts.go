@@ -1,4 +1,4 @@
-package main
+package service
 
 const (
 	colCIdx = 2  // C: 采购订单号 (receipt)
