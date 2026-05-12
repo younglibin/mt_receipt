@@ -49,6 +49,30 @@ func main() {
 		log.Fatalf("找不到 MT 文件: %v", err)
 	}
 
+	// ========== 新增：文件格式校验 ==========
+	log.Println("开始校验文件格式...")
+
+	// 校验 MT 文件表头
+	templateMTPath := service.FindExisting([]string{"template/MT.xlsx", "template/MT.xls"})
+	if templateMTPath == "" {
+		log.Fatalf("找不到模板 MT 文件")
+	}
+	if err := service.ValidateMTHeader(*mtPath, templateMTPath); err != nil {
+		log.Fatalf("MT 文件表头校验失败: %v", err)
+	}
+	log.Println("MT 文件表头校验通过")
+
+	// 校验 receipt 文件表头
+	templateReceiptPath := service.FindExisting([]string{"template/receipt.xlsx", "template/receipt.xls"})
+	if templateReceiptPath == "" {
+		log.Fatalf("找不到模板 receipt 文件")
+	}
+	if err := service.ValidateReceiptHeader(*receiptPath, templateReceiptPath); err != nil {
+		log.Fatalf("receipt 文件表头校验失败: %v", err)
+	}
+	log.Println("receipt 文件表头校验通过")
+	// ========== 校验结束 ==========
+
 	// 4. 业务逻辑
 	receiptSheetUsed, receiptRows, err := service.LoadRowsGeneric(*receiptPath, *receiptSheet)
 	if err != nil {
