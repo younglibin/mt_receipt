@@ -1,0 +1,50 @@
+# Go 构建输出
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.out
+bx_mt_project
+BX_MT_Project
+
+# Go 模块缓存
+go.sum
+go.mod.bak
+
+# 临时文件和缓存
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# 输出目录
+output/
+temp/
+
+# 备份文件
+*.bak
+*.backup
+
+# 测试文件和数据
+testdata/
+*.test
+
+# 日志文件
+*.log
+
+# IDE 文件
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Docker 构建缓存
+dockerfile.bak
+
+# Excel 测试数据 (保留目录结构但忽略文件)
+File/*.xls
+File/*.xlsx
+File/.DS_Store
+
