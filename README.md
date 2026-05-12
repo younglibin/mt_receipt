@@ -1,3 +1,5 @@
+安装 docker  ， 打包 docker：docker build -t bx_mt_project .
+
 第⼀步：在 bx_mt_project 镜像右侧，点击"Run"（运⾏）按钮
 <img width="2752" height="1048" alt="image" src="https://github.com/user-attachments/assets/c51e292f-cf0c-4da0-9014-3d7050038190" />
 
