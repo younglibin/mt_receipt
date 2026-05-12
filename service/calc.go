@@ -1,4 +1,4 @@
-package main
+package service
 
 import (
 	"fmt"
@@ -52,7 +52,7 @@ func parseMoney(s string) (float64, error) {
 }
 
 // 在 receipt 中按 C 列分组，对 K 列求和
-func sumUnpaidByPO(receiptRows [][]string) map[string]float64 {
+func SumUnpaidByPO(receiptRows [][]string) map[string]float64 {
 	sums := make(map[string]float64)
 	for i, r := range receiptRows {
 		if i == 0 { // 跳过表头
@@ -77,7 +77,7 @@ func sumUnpaidByPO(receiptRows [][]string) map[string]float64 {
 }
 
 // 在 MT 中匹配 PO，返回：表头、匹配行、对应差值、PO->设计师映射
-func filterMTRowsByPO(mtRows [][]string, sums map[string]float64) (
+func FilterMTRowsByPO(mtRows [][]string, sums map[string]float64) (
 	header []string,
 	selected [][]string, // 匹配到的原始行
 	selectedDiff []float64, // 对应的差值（AA - 预估费用）

@@ -1,4 +1,4 @@
-package main
+package service
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 )
 
 // 填充receipt文件的设计师信息并排序
-func fillReceiptDesignerFromRows(rows [][]string, sheetName, outPath string, poToDesigner map[string]string) error {
+func FillReceiptDesignerFromRows(rows [][]string, sheetName, outPath string, poToDesigner map[string]string) error {
 	if poToDesigner == nil {
 		poToDesigner = make(map[string]string)
 	}
@@ -101,7 +101,7 @@ func fillReceiptDesignerFromRows(rows [][]string, sheetName, outPath string, poT
 }
 
 // 在 receipt_filled 文件中按设计师汇总未付款，写到第 2 个 Sheet
-func summarizeDesignerUnpaid(xlsxPath string) error {
+func SummarizeDesignerUnpaid(xlsxPath string) error {
 	f, err := excelize.OpenFile(xlsxPath)
 	if err != nil {
 		return err

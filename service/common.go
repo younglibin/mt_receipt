@@ -1,4 +1,4 @@
-package main
+package service
 
 import (
 	"fmt"
@@ -19,7 +19,7 @@ func safeCol(row []string, idx int) string {
 }
 
 // 统一入口：根据扩展名自动选择 xls 或 xlsx 读取
-func loadRowsGeneric(path, sheetPref string) (string, [][]string, error) {
+func LoadRowsGeneric(path, sheetPref string) (string, [][]string, error) {
 	ext := strings.ToLower(filepath.Ext(path))
 	if ext == ".xls" {
 		return loadRowsXLS(path, sheetPref)
@@ -124,7 +124,7 @@ func getFirstDesigner(designers string) string {
 }
 
 // 在 paths 里找第一个存在的文件，找不到返回空串
-func findExisting(paths []string) string {
+func FindExisting(paths []string) string {
 	for _, p := range paths {
 		if _, err := os.Stat(p); err == nil {
 			return p

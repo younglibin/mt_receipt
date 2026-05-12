@@ -1,6 +1,7 @@
 package main
 
 import (
+	"BX_MT_Project/service"
 	"flag"
 	"fmt"
 	"log"
@@ -31,10 +32,10 @@ func main() {
 
 	// 3. 若未传参，则尝试读取 File 目录下的默认文件
 	if *receiptPath == "" {
-		*receiptPath = findExisting([]string{"File/receipt.xlsx", "File/receipt.xls"})
+		*receiptPath = service.FindExisting([]string{"File/receipt.xlsx", "File/receipt.xls"})
 	}
 	if *mtPath == "" {
-		*mtPath = findExisting([]string{"File/MT.xlsx", "File/MT.xls"})
+		*mtPath = service.FindExisting([]string{"File/MT.xlsx", "File/MT.xls"})
 	}
 
 	if *receiptPath == "" || *mtPath == "" {
@@ -49,32 +50,32 @@ func main() {
 	}
 
 	// 4. 业务逻辑
-	receiptSheetUsed, receiptRows, err := loadRowsGeneric(*receiptPath, *receiptSheet)
+	receiptSheetUsed, receiptRows, err := service.LoadRowsGeneric(*receiptPath, *receiptSheet)
 	if err != nil {
 		log.Fatalf("读取 receipt 失败: %v", err)
 	}
-	poToSum := sumUnpaidByPO(receiptRows)
+	poToSum := service.SumUnpaidByPO(receiptRows)
 	log.Printf("在工作表 %q 中统计到 %d 个 PO 的未付款金额汇总", receiptSheetUsed, len(poToSum))
 
-	mtSheetUsed, mtRows, err := loadRowsGeneric(*mtPath, *mtSheet)
+	mtSheetUsed, mtRows, err := service.LoadRowsGeneric(*mtPath, *mtSheet)
 	if err != nil {
 		log.Fatalf("读取 MT 失败: %v", err)
 	}
-	header, matchedRows, matchedDiffs, poToDesigner := filterMTRowsByPO(mtRows, poToSum)
+	header, matchedRows, matchedDiffs, poToDesigner := service.FilterMTRowsByPO(mtRows, poToSum)
 	log.Printf("在工作表 %q 中匹配到 %d 行写入结果", mtSheetUsed, len(matchedRows))
 
-	if err := writeResultXLSX(*outPath, header, matchedRows, matchedDiffs); err != nil {
+	if err := service.WriteResultXLSX(*outPath, header, matchedRows, matchedDiffs); err != nil {
 		log.Fatalf("写入结果文件失败: %v", err)
 	}
 	log.Printf("已生成结果文件: %s", *outPath)
 
-	if err := fillReceiptDesignerFromRows(receiptRows, receiptSheetUsed, *receiptOutPath, poToDesigner); err != nil {
+	if err := service.FillReceiptDesignerFromRows(receiptRows, receiptSheetUsed, *receiptOutPath, poToDesigner); err != nil {
 		log.Fatalf("写回设计师到 receipt 失败: %v", err)
 	}
 	log.Printf("已写回 receipt 文件到: %s", *receiptOutPath)
 
 	// 4) 以 receipt_filled 为准，按设计师汇总未付款，写到第 2 个 Sheet
-	if err := summarizeDesignerUnpaid(*receiptOutPath); err != nil {
+	if err := service.SummarizeDesignerUnpaid(*receiptOutPath); err != nil {
 		log.Fatalf("按设计师汇总未付款失败: %v", err)
 	}
 	log.Printf("已生成设计师汇总 Sheet")
