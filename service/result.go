@@ -7,15 +7,15 @@ import (
 )
 
 // 生成 result.xlsx：差异行整红字，W 列写差值，按 E列对接设计师第一个名字和 G列执行设计师排序
-func WriteResultXLSX(outPath string, header []string, rows [][]string, diffs []float64) error {
+func WriteResultXLSX(outPath string, header []string, rows [][]string, diffs []float64, designerRecordMap map[string]DesignerRecord) error {
 	f := excelize.NewFile()
 	sheet := "Sheet1"
 	if _, err := f.NewSheet(sheet); err != nil {
 		return err
 	}
 
-	// 1. 补 W 列表头
-	header = append(header, "差值")
+	// 1. 补结果附加列
+	header = append(header, "差值", "结算公司", "设计类型")
 
 	// 2. 写表头
 	for col, h := range header {
@@ -86,11 +86,21 @@ func WriteResultXLSX(outPath string, header []string, rows [][]string, diffs []f
 			cell, _ := excelize.CoordinatesToCellName(col+1, rowNum)
 			_ = f.SetCellValue(sheet, cell, val)
 		}
-		// 5.2 写 W 列差值
-		diffCell, _ := excelize.CoordinatesToCellName(len(header), rowNum)
-		_ = f.SetCellValue(sheet, diffCell, diff)
+		// 5.2 根据执行设计师补充设计类型、结算公司
+		designerCellValue := safeCol(row, colGIdx)
+		designerRecord, found := FindDesignerRecord(designerCellValue, designerRecordMap)
 
-		// 5.3 差值≠0 → 整行染红
+		// 5.3 写差值、结算公司、设计类型
+		diffCell, _ := excelize.CoordinatesToCellName(len(header)-2, rowNum)
+		_ = f.SetCellValue(sheet, diffCell, diff)
+		settlementCell, _ := excelize.CoordinatesToCellName(len(header)-1, rowNum)
+		designTypeCell, _ := excelize.CoordinatesToCellName(len(header), rowNum)
+		if found {
+			_ = f.SetCellValue(sheet, settlementCell, designerRecord.SettlementCompany)
+			_ = f.SetCellValue(sheet, designTypeCell, designerRecord.DesignType)
+		}
+
+		// 5.4 差值≠0 → 整行染红
 		if diff != 0 {
 			left, _ := excelize.CoordinatesToCellName(1, rowNum)
 			right, _ := excelize.CoordinatesToCellName(len(header), rowNum)
