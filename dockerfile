@@ -1,5 +1,5 @@
-# 使用官方的Go 1.24.0镜像作为基础
-FROM golang:1.24.0-alpine
+# 使用官方的Go 1.21镜像作为基础
+FROM golang:1.21-alpine
 
 # 设置工作目录
 WORKDIR /app
