@@ -1,0 +1,13 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: dockerfile
+    image: bx_mt_project
+    container_name: bx_mt_project_web
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./output:/app/output
+      - ./uploads:/app/uploads
+    restart: unless-stopped

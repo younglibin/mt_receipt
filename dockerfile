@@ -17,7 +17,10 @@ COPY . .
 RUN go build -o bx_mt_project .
 
 # 创建必要的目录
-RUN mkdir -p File output
+RUN mkdir -p File output uploads
 
-# 设置默认命令
-CMD ["./bx_mt_project"]
+# 暴露 Web 页面端口
+EXPOSE 8080
+
+# 默认启动 Web 页面
+CMD ["./bx_mt_project", "web", "-addr", ":8080"]

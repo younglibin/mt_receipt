@@ -149,20 +149,48 @@ go run . settlement \
 
 ## Docker
 
-打包镜像：
+推荐使用 Docker Compose 启动，端口映射和目录挂载已经写在 `docker-compose.yml`：
 
 ```bash
-docker build -t bx_mt_project .
+docker compose up -d --build
 ```
 
-运行容器时，建议挂载两个目录：
+启动后在本地浏览器访问：
 
-- 输入目录挂载到 `/app/File`
+```text
+http://localhost:8080
+```
+
+停止服务：
+
+```bash
+docker compose down
+```
+
+也可以不用 Compose，手动打包镜像：
+
+```bash
+docker build -f dockerfile -t bx_mt_project .
+```
+
+手动启动 Web 页面：
+
+```bash
+docker run --rm \
+  -p 8080:8080 \
+  -v "$(pwd)/output:/app/output" \
+  -v "$(pwd)/uploads:/app/uploads" \
+  bx_mt_project
+```
+
+运行容器时，建议挂载以下目录：
+
 - 输出目录挂载到 `/app/output`
+- 上传目录挂载到 `/app/uploads`
 
 可参考以下目录映射：
 
-- 本地输入目录：存放 `MT.xlsx`、`receipt.xls`、`result.xlsx`
-- 容器输入目录：`/app/File`
 - 本地输出目录：接收程序生成结果
 - 容器输出目录：`/app/output`
+- 本地上传目录：保存页面上传的文件
+- 容器上传目录：`/app/uploads`
