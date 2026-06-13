@@ -57,6 +57,7 @@ func GenerateSettlementSheets(inputPath, outputPath string) error {
 		"设计类型",
 		"执行设计师",
 		"实际金额",
+		"开票日期",
 		"结算公司",
 	}
 	for _, header := range requiredSourceHeaders {
@@ -165,7 +166,7 @@ func buildSettlementOutputRow(sourceRow []string, headerIndex map[string]int) []
 		safeCol(sourceRow, headerIndex["执行设计师"]),
 		"",
 		safeCol(sourceRow, headerIndex["实际金额"]),
-		"",
+		safeCol(sourceRow, headerIndex["开票日期"]),
 		safeCol(sourceRow, headerIndex["结算公司"]),
 	}
 }
