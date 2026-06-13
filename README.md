@@ -1,25 +1,141 @@
-安装 docker  ， 打包 docker：docker build -t bx_mt_project .
+# BX_MT_Project
 
-第⼀步：在 bx_mt_project 镜像右侧，点击"Run"（运⾏）按钮
-<img width="2752" height="1048" alt="image" src="https://github.com/user-attachments/assets/c51e292f-cf0c-4da0-9014-3d7050038190" />
+## 环境要求
 
-第⼆步：在弹出的"Run a container"（运⾏容器）对话框中，您需要配置以下选项：
-<img width="2696" height="1234" alt="image" src="https://github.com/user-attachments/assets/19d3ac6f-7371-4ea6-9857-7a2132dfd642" />
+- Go 版本：`1.21`
 
-Container name（容器名称）：可以⾃定义⼀个名称，如 bx_mt_project_container
-Volumes（卷）：点击"Add volume"（添加卷）按钮，添加两个卷：
-第⼀个卷：
-Host Path（主机路径）：选择您本地存放MT.xlsx和receipt.xls⽂件的⽬录
-（如 /Users/yourusername/File ）
-Container Path（容器路径）：设置为 /app/File
-第⼆个卷：
-Host Path（主机路径）：选择您本地存放输出⽂件的⽬录
-（如 /Users/yourusername/output ）
-Container Path（容器路径）：设置为 /app/output
-<img width="2598" height="1472" alt="image" src="https://github.com/user-attachments/assets/0b926b96-7f2a-4d6c-a485-9994863c08c2" />
+## 命令说明
 
-第三步： 将要计算的⽂件上传到 File ⽬录下
-点击 ： run，在output 下得到：
-以后执⾏：
-第⼀步：更新 本地⽬录中 File 下的MT ⽂件 和 receipt ⽂件 为本次要计算的⽂件；
-找到containers 找到上次执⾏的配置， 点击 后边 执⾏按钮 即可， 就会在 output 下找到 计算结果。
+项目现在使用两个子命令：
+
+- `receipt`：原有双文件处理逻辑
+- `settlement`：新增结算拆分逻辑
+- `web`：启动本地页面，通过浏览器选择文件并执行算账逻辑
+
+查看帮助：
+
+```bash
+go run . receipt -h
+go run . settlement -h
+go run . web -h
+```
+
+## 本地页面
+
+启动页面：
+
+```bash
+go run . web
+```
+
+打开浏览器访问：
+
+```text
+http://localhost:8080
+```
+
+页面包含两组功能：
+
+- 第一组“算账”：选择 `MT` 文件和 `receipt` 文件，点击“执行”后等价执行 `receipt -mt <MT文件路径> -receipt <receipt文件路径>`
+- 第二组“月度算账”：选择 `result` 文件，点击“月度算账”后等价执行 `settlement -input <result文件路径>`
+
+说明：
+
+- 浏览器无法直接读取用户电脑上的真实本地文件路径，页面会先把文件上传到本地 Go 服务的 `uploads` 目录
+- 服务端会把上传后的本地文件路径传给 `receipt` 或 `settlement` 命令执行
+- 输出文件仍按原逻辑生成到 `output` 目录
+
+## receipt 命令
+
+用途：
+
+- 读取 `receipt` 和 `MT` 两个文件
+- 生成结果文件和回写后的 `receipt` 文件
+
+执行示例：
+
+```bash
+go run . receipt
+```
+
+如需手动指定文件：
+
+```bash
+go run . receipt \
+  -receipt /path/to/receipt.xls \
+  -mt /path/to/MT.xlsx \
+  -out /path/to/result.xlsx \
+  -receipt-out /path/to/receipt_filled.xlsx
+```
+
+
+## settlement 命令
+
+用途：
+
+- 输入一个 `xlsx` 文件
+- 基于第一个工作表，按“结算公司”拆分成多个 sheet
+
+
+
+执行示例：
+
+```bash
+
+go run . settlement
+```
+
+如需手动指定输入输出文件：
+
+```bash
+go run . settlement \
+  -input /path/to/input.xlsx \
+  -out /path/to/output.xlsx
+```
+## Docker
+
+推荐使用 Docker Compose 启动，端口映射和目录挂载已经写在 `docker-compose.yml`：
+
+```bash
+docker compose up -d --build
+```
+
+启动后在本地浏览器访问：
+
+```text
+http://localhost:8080
+```
+
+停止服务：
+
+```bash
+docker compose down
+```
+
+也可以不用 Compose，手动打包镜像：
+
+```bash
+docker build -f dockerfile -t bx_mt_project .
+```
+
+手动启动 Web 页面：
+
+```bash
+docker run --rm \
+  -p 8080:8080 \
+  -v "$(pwd)/output:/app/output" \
+  -v "$(pwd)/uploads:/app/uploads" \
+  bx_mt_project
+```
+
+运行容器时，建议挂载以下目录：
+
+- 输出目录挂载到 `/app/output`
+- 上传目录挂载到 `/app/uploads`
+
+可参考以下目录映射：
+
+- 本地输出目录：接收程序生成结果
+- 容器输出目录：`/app/output`
+- 本地上传目录：保存页面上传的文件
+- 容器上传目录：`/app/uploads`

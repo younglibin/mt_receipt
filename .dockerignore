@@ -1,0 +1,13 @@
+.git
+.gitignore
+.DS_Store
+
+output
+uploads
+File
+
+*.tar
+*.log
+
+README.md
+requirements

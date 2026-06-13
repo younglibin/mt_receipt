@@ -22,6 +22,10 @@ Thumbs.db
 temp/
 File/*
 output/*
+uploads/*
+
+# Docker 镜像导出文件
+*.tar
 
 # 备份文件
 *.bak
@@ -43,5 +47,4 @@ testdata/
 
 # Docker 构建缓存
 dockerfile.bak
-
 
