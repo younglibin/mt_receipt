@@ -50,7 +50,9 @@
     { "name": "姜凯航", "designType": "物料", "settlementCompany": "無定岩" },
     { "name": "计智超", "designType": "营销", "settlementCompany": "源知" },
     { "name": "黄辉", "designType": "包装", "settlementCompany": "禾黄新视觉" },
-    { "name": "祝琳", "designType": "营销", "settlementCompany": "惊喜连连" },
-    { "name": "石琳", "designType": "营销", "settlementCompany": "惊喜连连" }
+    { "name": "祝琳", "designType": "营销", "settlementCompany": "浮蓝记" },
+    { "name": "石琳", "designType": "营销", "settlementCompany": "惊喜连连" },
+    { "name": "李康乐", "designType": "包装", "settlementCompany": "八分半" },
+    { "name": "陆思成", "designType": "接口人", "settlementCompany": "八分半" }
   ]
 }
