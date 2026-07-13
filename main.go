@@ -15,6 +15,12 @@ import (
 	"time"
 )
 
+const (
+	mcpProtocolVersion = "2025-03-26"
+	mcpServerName      = "bx-mt-project"
+	mcpServerVersion   = "1.0.0"
+)
+
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
@@ -36,7 +42,7 @@ func main() {
 
 func runReceiptCommand(args []string) {
 	// 1. 确保 output 目录存在
-	outDir := "output"
+	outDir := service.GetRuntimePathConfig().WebFileOutput
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		log.Fatalf("创建 output 目录失败: %v", err)
 	}
@@ -61,10 +67,10 @@ func runReceiptCommand(args []string) {
 
 	// 3. 若未传参，则尝试读取 File 目录下的默认文件
 	if *receiptPath == "" {
-		*receiptPath = service.FindExisting([]string{"File/receipt.xlsx", "File/receipt.xls"})
+		*receiptPath = service.FindExisting(buildDefaultInputCandidates("receipt.xlsx", "receipt.xls"))
 	}
 	if *mtPath == "" {
-		*mtPath = service.FindExisting([]string{"File/MT.xlsx", "File/MT.xls"})
+		*mtPath = service.FindExisting(buildDefaultInputCandidates("MT.xlsx", "MT.xls"))
 	}
 
 	if *receiptPath == "" || *mtPath == "" {
@@ -141,7 +147,7 @@ func runReceiptCommand(args []string) {
 }
 
 func runSettlementCommand(args []string) {
-	outDir := "output"
+	outDir := service.GetRuntimePathConfig().WebFileOutput
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		log.Fatalf("创建 output 目录失败: %v", err)
 	}
@@ -154,7 +160,7 @@ func runSettlementCommand(args []string) {
 	}
 
 	if *settlementPath == "" {
-		*settlementPath = service.FindExisting([]string{"File/result.xlsx"})
+		*settlementPath = service.FindExisting(buildDefaultInputCandidates("result.xlsx"))
 	}
 	if *settlementPath == "" {
 		fmt.Println("用法: go run . settlement [-input <input.xlsx>] [-out <输出路径>]")
@@ -187,6 +193,7 @@ func runWebCommand(args []string) {
 	mux.HandleFunc("/", serveIndexPage)
 	mux.HandleFunc("/api/receipt", handleReceiptAPI)
 	mux.HandleFunc("/api/settlement", handleSettlementAPI)
+	mux.HandleFunc("/mcp", handleMCPAPI)
 
 	log.Printf("页面已启动: http://localhost%s", *addr)
 	if err := http.ListenAndServe(*addr, mux); err != nil {
@@ -256,6 +263,47 @@ func handleSettlementAPI(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, apiResponse{OK: true, Message: "settlement 执行完成", Output: output})
 }
 
+func handleMCPAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "MCP endpoint only supports POST", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req mcpRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeMCPError(w, nil, -32700, fmt.Sprintf("解析 MCP 请求失败: %v", err))
+		return
+	}
+	if req.JSONRPC != "2.0" {
+		writeMCPError(w, req.ID, -32600, "只支持 JSON-RPC 2.0")
+		return
+	}
+
+	switch req.Method {
+	case "initialize":
+		writeMCPResult(w, req.ID, buildInitializeResult())
+	case "notifications/initialized":
+		writeMCPNotificationAck(w)
+	case "ping":
+		writeMCPResult(w, req.ID, map[string]any{})
+	case "tools/list":
+		writeMCPResult(w, req.ID, map[string]any{
+			"tools":      buildMCPTools(),
+			"nextCursor": "",
+		})
+	case "tools/call":
+		result, err := handleMCPToolCall(req.Params)
+		if err != nil {
+			writeMCPError(w, req.ID, -32602, err.Error())
+			return
+		}
+		writeMCPResult(w, req.ID, result)
+	default:
+		writeMCPError(w, req.ID, -32601, fmt.Sprintf("不支持的方法: %s", req.Method))
+	}
+}
+
 func saveUploadedFile(r *http.Request, fieldName string) (string, error) {
 	file, header, err := r.FormFile(fieldName)
 	if err != nil {
@@ -263,12 +311,16 @@ func saveUploadedFile(r *http.Request, fieldName string) (string, error) {
 	}
 	defer file.Close()
 
-	if mkdirErr := os.MkdirAll("uploads", 0755); mkdirErr != nil {
+	uploadDir, err := resolveWebUploadDir()
+	if err != nil {
+		return "", err
+	}
+	if mkdirErr := os.MkdirAll(uploadDir, 0755); mkdirErr != nil {
 		return "", mkdirErr
 	}
 	ext := filepath.Ext(header.Filename)
 	fileName := fmt.Sprintf("%s_%s%s", time.Now().Format("20060102_150405_000000000"), fieldName, ext)
-	path, err := filepath.Abs(filepath.Join("uploads", fileName))
+	path, err := filepath.Abs(filepath.Join(uploadDir, fileName))
 	if err != nil {
 		return "", err
 	}
@@ -282,6 +334,31 @@ func saveUploadedFile(r *http.Request, fieldName string) (string, error) {
 		return "", copyErr
 	}
 	return path, nil
+}
+
+func buildDefaultInputCandidates(fileNames ...string) []string {
+	cfg := service.GetRuntimePathConfig()
+	baseDir := cfg.WebFile
+	if baseDir == "" {
+		baseDir = "File"
+	}
+
+	candidates := make([]string, 0, len(fileNames))
+	for _, fileName := range fileNames {
+		candidates = append(candidates, filepath.Join(baseDir, fileName))
+	}
+	return candidates
+}
+
+func resolveWebUploadDir() (string, error) {
+	dir := service.GetRuntimePathConfig().WebFileUploads
+	if dir == "" {
+		dir = "uploads"
+	}
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+	return dir, nil
 }
 
 func executeSubcommand(args ...string) (string, error) {
@@ -307,6 +384,7 @@ type apiResponse struct {
 	OK      bool   `json:"ok"`
 	Message string `json:"message"`
 	Output  string `json:"output,omitempty"`
+	Data    any    `json:"data,omitempty"`
 }
 
 func writeJSON(w http.ResponseWriter, status int, resp apiResponse) {
@@ -315,11 +393,202 @@ func writeJSON(w http.ResponseWriter, status int, resp apiResponse) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
+func writeMCPResult(w http.ResponseWriter, id json.RawMessage, result any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(mcpResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result:  result,
+	})
+}
+
+func writeMCPError(w http.ResponseWriter, id json.RawMessage, code int, message string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(mcpResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Error: &mcpError{
+			Code:    code,
+			Message: message,
+		},
+	})
+}
+
+func writeMCPNotificationAck(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func buildInitializeResult() map[string]any {
+	return map[string]any{
+		"protocolVersion": mcpProtocolVersion,
+		"capabilities": map[string]any{
+			"tools": map[string]any{
+				"listChanged": false,
+			},
+		},
+		"serverInfo": map[string]any{
+			"name":    mcpServerName,
+			"version": mcpServerVersion,
+		},
+		"instructions": "提供 MT/receipt 算账与月度 settlement 拆分能力。MCP 工具入参使用容器内可访问的文件路径。",
+	}
+}
+
+func buildMCPTools() []map[string]any {
+	return []map[string]any{
+		{
+			"name":        "receipt_calculate",
+			"description": "根据 MT 文件路径和 receipt 文件路径执行算账，生成 result.xlsx 和 receipt_filled.xlsx。",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"mt_file_path": map[string]any{
+						"type":        "string",
+						"description": "MT 文件路径，支持 .xls / .xlsx",
+					},
+					"receipt_file_path": map[string]any{
+						"type":        "string",
+						"description": "receipt 文件路径，支持 .xls / .xlsx",
+					},
+				},
+				"required":             []string{"mt_file_path", "receipt_file_path"},
+				"additionalProperties": false,
+			},
+		},
+		{
+			"name":        "monthly_settlement",
+			"description": "根据 result.xlsx 文件路径执行月度算账，生成 settlement 输出文件。",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"result_file_path": map[string]any{
+						"type":        "string",
+						"description": "result.xlsx 文件路径",
+					},
+				},
+				"required":             []string{"result_file_path"},
+				"additionalProperties": false,
+			},
+		},
+	}
+}
+
+func handleMCPToolCall(rawParams json.RawMessage) (map[string]any, error) {
+	var params mcpToolCallParams
+	if err := json.Unmarshal(rawParams, &params); err != nil {
+		return nil, fmt.Errorf("解析 tools/call 参数失败: %w", err)
+	}
+
+	switch params.Name {
+	case "receipt_calculate":
+		var args receiptMCPArgs
+		if err := json.Unmarshal(params.Arguments, &args); err != nil {
+			return nil, fmt.Errorf("解析 receipt_calculate 入参失败: %w", err)
+		}
+		if args.MTFilePath == "" || args.ReceiptFilePath == "" {
+			return buildMCPToolResult("mt_file_path 和 receipt_file_path 不能为空", "", true), nil
+		}
+		if err := ensureFileExists(args.MTFilePath); err != nil {
+			return buildMCPToolResult(err.Error(), "", true), nil
+		}
+		if err := ensureFileExists(args.ReceiptFilePath); err != nil {
+			return buildMCPToolResult(err.Error(), "", true), nil
+		}
+
+		output, err := executeSubcommand("receipt", "-mt", args.MTFilePath, "-receipt", args.ReceiptFilePath)
+		if err != nil {
+			return buildMCPToolResult(fmt.Sprintf("receipt 执行失败: %v", err), output, true), nil
+		}
+		return buildMCPToolResult("receipt 执行完成", output, false), nil
+	case "monthly_settlement":
+		var args settlementMCPArgs
+		if err := json.Unmarshal(params.Arguments, &args); err != nil {
+			return nil, fmt.Errorf("解析 monthly_settlement 入参失败: %w", err)
+		}
+		if args.ResultFilePath == "" {
+			return buildMCPToolResult("result_file_path 不能为空", "", true), nil
+		}
+		if err := ensureFileExists(args.ResultFilePath); err != nil {
+			return buildMCPToolResult(err.Error(), "", true), nil
+		}
+
+		output, err := executeSubcommand("settlement", "-input", args.ResultFilePath)
+		if err != nil {
+			return buildMCPToolResult(fmt.Sprintf("settlement 执行失败: %v", err), output, true), nil
+		}
+		return buildMCPToolResult("settlement 执行完成", output, false), nil
+	default:
+		return buildMCPToolResult(fmt.Sprintf("未知工具: %s", params.Name), "", true), nil
+	}
+}
+
+func buildMCPToolResult(message, output string, isError bool) map[string]any {
+	text := message
+	if output != "" {
+		text += "\n\n" + output
+	}
+
+	return map[string]any{
+		"content": []map[string]any{
+			{
+				"type": "text",
+				"text": text,
+			},
+		},
+		"isError": isError,
+		"structuredContent": map[string]any{
+			"ok":      !isError,
+			"message": message,
+			"output":  output,
+		},
+	}
+}
+
+func ensureFileExists(path string) error {
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("文件不可访问: %s, err: %v", path, err)
+	}
+	return nil
+}
+
 func printUsage() {
 	fmt.Println("用法:")
 	fmt.Println("  go run . receipt [-receipt <receipt.xlsx|receipt.xls>] [-mt <MT.xlsx|MT.xls>] [-out <路径>] [-receipt-out <路径>] [-receipt-sheet 名称] [-mt-sheet 名称]")
 	fmt.Println("  go run . settlement [-input <input.xlsx>] [-out <输出路径>]  (默认读取 File/result.xlsx，输出到 output/yyyyMMdd_HHmmss_settlement.xlsx)")
-	fmt.Println("  go run . web [-addr :8080]  (启动本地页面)")
+	fmt.Println("  go run . web [-addr :8080]  (启动本地页面，同时提供 /mcp MCP 接口)")
+}
+
+type mcpRequest struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id,omitempty"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params,omitempty"`
+}
+
+type mcpResponse struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id,omitempty"`
+	Result  any             `json:"result,omitempty"`
+	Error   *mcpError       `json:"error,omitempty"`
+}
+
+type mcpError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+type mcpToolCallParams struct {
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments"`
+}
+
+type receiptMCPArgs struct {
+	MTFilePath      string `json:"mt_file_path"`
+	ReceiptFilePath string `json:"receipt_file_path"`
+}
+
+type settlementMCPArgs struct {
+	ResultFilePath string `json:"result_file_path"`
 }
 
 const indexHTML = `<!doctype html>

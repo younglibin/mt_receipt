@@ -38,6 +38,7 @@ http://localhost:8080
 
 - 第一组“算账”：选择 `MT` 文件和 `receipt` 文件，点击“执行”后等价执行 `receipt -mt <MT文件路径> -receipt <receipt文件路径>`
 - 第二组“月度算账”：选择 `result` 文件，点击“月度算账”后等价执行 `settlement -input <result文件路径>`
+- 额外提供文件上传识别接口：可传入容器内文件路径，服务会复制到上传目录并根据表头识别文件类型
 
 说明：
 
@@ -139,3 +140,61 @@ docker run --rm \
 - 容器输出目录：`/app/output`
 - 本地上传目录：保存页面上传的文件
 - 容器上传目录：`/app/uploads`
+
+## MCP
+
+当前项目已经直接在现有 Web 服务中内置 MCP 能力，不再需要单独的 `mcp_server` 目录。
+
+启动方式：
+
+```bash
+go run . web
+```
+
+默认地址：
+
+```text
+http://localhost:8080
+```
+
+MCP 入口：
+
+```text
+http://localhost:8080/mcp
+```
+
+当前暴露的 MCP tools：
+
+- `receipt_calculate`
+- `monthly_settlement`
+
+LibreChat 配置示例见：
+
+- [librechat.mcp.example.yaml](file:///Users/bytedance/GolandProjects/BX_MT_Project/librechat.mcp.example.yaml)
+
+说明：
+
+- `receipt_calculate` 使用 `mt_file_path`、`receipt_file_path` 作为入参
+- `monthly_settlement` 使用 `result_file_path` 作为入参
+- 这两个工具底层复用当前项目已有的 `receipt` 和 `settlement` 子命令
+- 如果通过 LibreChat 在 Docker 中接入，请保证 LibreChat 容器与当前服务容器之间使用可共享的文件路径
+
+## 路径配置
+
+运行时路径统一配置在：
+
+- [config/path.properties](file:///Users/bytedance/GolandProjects/BX_MT_Project/config/path.properties)
+
+当前支持以下配置项：
+
+```properties
+web.File.uploads=/app/uploads
+web.File=/app/File
+web.File.output=/app/output
+```
+
+说明：
+
+- `web.File.uploads`：浏览器页面上传目录
+- `web.File`：命令行默认输入文件目录
+- `web.File.output`：结果输出目录

@@ -1,0 +1,9 @@
+mcpServers:
+  bx-mt-project:
+    type: streamable-http
+    url: http://bx_mt_project_web:8080/mcp
+    timeout: 60000
+    serverInstructions: true
+    chatMenu: true
+    headers:
+      X-User-ID: '{{LIBRECHAT_USER_ID}}'

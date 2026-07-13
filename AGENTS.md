@@ -156,3 +156,8 @@
   - 子命令复用是否仍成立：`main.go:287`
 - 如果新增设计师字段或调整结算逻辑，优先从 `config/designers.json` 和 `service/designer_config.go:20` 入手，而不是把映射散落到代码里。
 - 如果要补测试，优先测 `service/` 中的纯逻辑，再考虑文件级回归；这比直接从 `main.go` 切入更稳。
+
+
+## 项目和Agent部署关系
+- 调用层级 LibreChat（Agent）--> mt_receipt(MCP Server) -->BX_MT_Project(服务)
+- 改项目是部署在docker容器中的， 我的agent liberchat 也是部署在docker 中，后续开发都会考虑在docker 中部署，访问都集中在docker中， 不会出现从docker调用我本地服务的情况
