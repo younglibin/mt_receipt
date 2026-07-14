@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -193,6 +194,7 @@ func runWebCommand(args []string) {
 	mux.HandleFunc("/", serveIndexPage)
 	mux.HandleFunc("/api/receipt", handleReceiptAPI)
 	mux.HandleFunc("/api/settlement", handleSettlementAPI)
+	mux.HandleFunc("/api/recent-receipt-summary", handleRecentReceiptSummaryAPI)
 	mux.HandleFunc("/mcp", handleMCPAPI)
 
 	log.Printf("页面已启动: http://localhost%s", *addr)
@@ -261,6 +263,26 @@ func handleSettlementAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, apiResponse{OK: true, Message: "settlement 执行完成", Output: output})
+}
+
+func handleRecentReceiptSummaryAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, apiResponse{OK: false, Message: "只支持 GET 请求"})
+		return
+	}
+
+	outputDir := strings.TrimSpace(r.URL.Query().Get("output_dir"))
+	summary, err := service.GetLatestReceiptSummary(outputDir)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse{
+		OK:      true,
+		Message: "最近 receipt 汇总查询成功",
+		Data:    summary,
+	})
 }
 
 func handleMCPAPI(w http.ResponseWriter, r *http.Request) {
@@ -430,7 +452,7 @@ func buildInitializeResult() map[string]any {
 			"name":    mcpServerName,
 			"version": mcpServerVersion,
 		},
-		"instructions": "提供 MT/receipt 算账与月度 settlement 拆分能力。MCP 工具入参使用容器内可访问的文件路径。",
+		"instructions": "提供 MT/receipt 算账、月度 settlement 拆分、最近一次 receipt 设计师汇总查询，以及按员工名查询最近一次结算明细能力。文件处理类 MCP 工具入参使用容器内可访问的文件路径。",
 	}
 }
 
@@ -467,6 +489,39 @@ func buildMCPTools() []map[string]any {
 					},
 				},
 				"required":             []string{"result_file_path"},
+				"additionalProperties": false,
+			},
+		},
+		{
+			"name":        "latest_receipt_summary",
+			"description": "查询输出目录下最近一个 receipt 输出文件中的设计师汇总信息，返回设计师名字、未付款金额和总计。",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"output_dir": map[string]any{
+						"type":        "string",
+						"description": "可选。输出目录路径；留空时默认使用配置中的 web.File.output。",
+					},
+				},
+				"additionalProperties": false,
+			},
+		},
+		{
+			"name":        "latest_employee_settlement",
+			"description": "输入员工名字，查询该员工最近一次结算信息。先从 designers.json 获取 designType 和 settlementCompany，再从最近的 settlement 文件对应 sheet 中返回该员工的所有结算行数据。",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"employee_name": map[string]any{
+						"type":        "string",
+						"description": "执行设计师名字，必须能在 config/designers.json 中找到。",
+					},
+					"output_dir": map[string]any{
+						"type":        "string",
+						"description": "可选。settlement 输出目录；留空时默认使用配置中的 web.File.output。",
+					},
+				},
+				"required":             []string{"employee_name"},
 				"additionalProperties": false,
 			},
 		},
@@ -517,9 +572,106 @@ func handleMCPToolCall(rawParams json.RawMessage) (map[string]any, error) {
 			return buildMCPToolResult(fmt.Sprintf("settlement 执行失败: %v", err), output, true), nil
 		}
 		return buildMCPToolResult("settlement 执行完成", output, false), nil
+	case "latest_receipt_summary":
+		var args recentReceiptSummaryMCPArgs
+		if len(params.Arguments) > 0 {
+			if err := json.Unmarshal(params.Arguments, &args); err != nil {
+				return nil, fmt.Errorf("解析 latest_receipt_summary 入参失败: %w", err)
+			}
+		}
+
+		summary, err := service.GetLatestReceiptSummary(args.OutputDir)
+		if err != nil {
+			return buildMCPToolResult(err.Error(), "", true), nil
+		}
+		return buildRecentReceiptSummaryResult(summary), nil
+	case "latest_employee_settlement":
+		var args latestEmployeeSettlementMCPArgs
+		if err := json.Unmarshal(params.Arguments, &args); err != nil {
+			return nil, fmt.Errorf("解析 latest_employee_settlement 入参失败: %w", err)
+		}
+		result, err := service.GetLatestEmployeeSettlement(args.EmployeeName, args.OutputDir, "config/designers.json")
+		if err != nil {
+			return buildMCPToolResult(err.Error(), "", true), nil
+		}
+		return buildLatestEmployeeSettlementResult(result), nil
 	default:
 		return buildMCPToolResult(fmt.Sprintf("未知工具: %s", params.Name), "", true), nil
 	}
+}
+
+func buildRecentReceiptSummaryResult(summary *service.RecentReceiptSummary) map[string]any {
+	lines := []string{
+		fmt.Sprintf("最近 receipt 汇总文件: %s", summary.FilePath),
+		fmt.Sprintf("文件时间: %s", summary.ModifiedAt),
+		"设计师汇总:",
+	}
+	for _, item := range summary.Designers {
+		lines = append(lines, fmt.Sprintf("- %s: %.2f", item.DesignerName, item.UnpaidAmount))
+	}
+	lines = append(lines, fmt.Sprintf("总计: %.2f", summary.Total))
+
+	text := strings.Join(lines, "\n")
+	return map[string]any{
+		"content": []map[string]any{
+			{
+				"type": "text",
+				"text": text,
+			},
+		},
+		"isError": false,
+		"structuredContent": map[string]any{
+			"ok":      true,
+			"message": "最近 receipt 汇总查询成功",
+			"summary": summary,
+		},
+	}
+}
+
+func buildLatestEmployeeSettlementResult(result *service.LatestEmployeeSettlementResult) map[string]any {
+	lines := []string{
+		fmt.Sprintf("员工: %s", result.EmployeeName),
+		fmt.Sprintf("设计类型: %s", result.DesignType),
+		fmt.Sprintf("结算公司: %s", result.SettlementCompany),
+		fmt.Sprintf("最近 settlement 文件: %s", result.SettlementFilePath),
+		fmt.Sprintf("Sheet: %s", result.SheetName),
+		fmt.Sprintf("文件时间: %s", result.ModifiedAt),
+		"结算记录:",
+	}
+	for idx, row := range result.Rows {
+		lines = append(lines, fmt.Sprintf("%d. %s", idx+1, formatSettlementRow(row, result.Headers)))
+	}
+
+	return map[string]any{
+		"content": []map[string]any{
+			{
+				"type": "text",
+				"text": strings.Join(lines, "\n"),
+			},
+		},
+		"isError": false,
+		"structuredContent": map[string]any{
+			"ok":      true,
+			"message": "员工最近一次结算信息查询成功",
+			"result":  result,
+		},
+	}
+}
+
+func formatSettlementRow(row map[string]string, headers []string) string {
+	parts := make([]string, 0, len(headers))
+	for _, header := range headers {
+		key := strings.TrimSpace(header)
+		if key == "" {
+			continue
+		}
+		value := strings.TrimSpace(row[key])
+		if value == "" {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s=%s", key, value))
+	}
+	return strings.Join(parts, "；")
 }
 
 func buildMCPToolResult(message, output string, isError bool) map[string]any {
@@ -589,6 +741,15 @@ type receiptMCPArgs struct {
 
 type settlementMCPArgs struct {
 	ResultFilePath string `json:"result_file_path"`
+}
+
+type recentReceiptSummaryMCPArgs struct {
+	OutputDir string `json:"output_dir"`
+}
+
+type latestEmployeeSettlementMCPArgs struct {
+	EmployeeName string `json:"employee_name"`
+	OutputDir    string `json:"output_dir"`
 }
 
 const indexHTML = `<!doctype html>
