@@ -64,7 +64,30 @@ func GetRuntimePathConfig() RuntimePathConfig {
 				runtimeConfig.WebFileOutput = value
 			}
 		}
+
+		// Docker 部署使用 /app/... 挂载路径；本地直接 go run 时回退到仓库相对目录。
+		runtimeConfig.AgentFileUploads = preferLocalPathWhenOutsideDocker(runtimeConfig.AgentFileUploads, "uploads")
+		runtimeConfig.WebFileUploads = preferLocalPathWhenOutsideDocker(runtimeConfig.WebFileUploads, "uploads")
+		runtimeConfig.WebFile = preferLocalPathWhenOutsideDocker(runtimeConfig.WebFile, "File")
+		runtimeConfig.WebFileOutput = preferLocalPathWhenOutsideDocker(runtimeConfig.WebFileOutput, "output")
 	})
 
 	return runtimeConfig
+}
+
+func preferLocalPathWhenOutsideDocker(configuredPath, fallback string) string {
+	path := strings.TrimSpace(configuredPath)
+	if path == "" {
+		return fallback
+	}
+
+	if !strings.HasPrefix(path, "/app") {
+		return path
+	}
+
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return path
+	}
+
+	return fallback
 }
