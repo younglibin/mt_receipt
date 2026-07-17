@@ -38,6 +38,7 @@ http://localhost:8080
 
 - 第一组“算账”：选择 `MT` 文件和 `receipt` 文件，点击“执行”后等价执行 `receipt -mt <MT文件路径> -receipt <receipt文件路径>`
 - 第二组“月度算账”：选择 `result` 文件，点击“月度算账”后等价执行 `settlement -input <result文件路径>`
+- 额外提供最近一次 `receipt` 设计师汇总查询接口：`GET /api/recent-receipt-summary`
 
 说明：
 
@@ -139,3 +140,71 @@ docker run --rm \
 - 容器输出目录：`/app/output`
 - 本地上传目录：保存页面上传的文件
 - 容器上传目录：`/app/uploads`
+
+## MCP
+
+当前项目已经直接在现有 Web 服务中内置 MCP 能力，不再需要单独的 `mcp_server` 目录。
+
+启动方式：
+
+```bash
+go run . web
+```
+
+默认地址：
+
+```text
+http://localhost:8080
+```
+
+MCP 入口：
+
+```text
+http://localhost:8080/mcp
+```
+
+当前暴露的 MCP tools：
+
+- `receipt_calculate`
+- `monthly_settlement`
+- `latest_receipt_summary`
+- `latest_employee_settlement`
+
+LibreChat 配置示例见：
+
+- [librechat.mcp.example.yaml](file:///Users/bytedance/GolandProjects/BX_MT_Project/librechat.mcp.example.yaml)
+
+说明：
+
+- `receipt_calculate` 使用 `mt_file_path`、`receipt_file_path` 作为入参
+- `monthly_settlement` 使用 `result_file_path` 作为入参
+- `latest_receipt_summary` 默认读取 `web.File.output` 目录下最近一个 `receipt` 输出文件中的“设计师汇总”Sheet，并返回设计师名字、未付款金额和总计
+- `latest_employee_settlement` 使用 `employee_name` 查询 `designers.json` 中对应员工，并在最近一个 settlement 文件中按结算公司 sheet 返回该员工的所有结算行数据
+- 这些工具底层复用当前项目已有的 `receipt`、`settlement` 和结果文件读取能力
+- 如果通过 LibreChat 在 Docker 中接入，请保证 LibreChat 容器与当前服务容器之间使用可共享的文件路径
+
+最近一次 `receipt` 汇总 HTTP 查询示例：
+
+```bash
+curl -s 'http://localhost:8080/api/recent-receipt-summary'
+```
+
+## 路径配置
+
+运行时路径统一配置在：
+
+- [config/path.properties](file:///Users/bytedance/GolandProjects/BX_MT_Project/config/path.properties)
+
+当前支持以下配置项：
+
+```properties
+web.File.uploads=/app/uploads
+web.File=/app/File
+web.File.output=/app/output
+```
+
+说明：
+
+- `web.File.uploads`：浏览器页面上传目录
+- `web.File`：命令行默认输入文件目录
+- `web.File.output`：结果输出目录

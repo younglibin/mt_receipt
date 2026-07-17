@@ -51,10 +51,10 @@ func FillReceiptDesignerFromRows(rows [][]string, sheetName, outPath string, poT
 	}
 	list := make([]rowInfo, 0, len(dataRows))
 	for _, r := range dataRows {
-		po := safeCol(r, colCIdx)
+		po := normalizePO(safeCol(r, colCIdx))
 		categoryMgr := safeCol(r, colLIdx) // 获取 L 列品类经理
 		designer := ""
-		if d, ok := poToDesigner[strings.ToUpper(strings.TrimSpace(po))]; ok {
+		if d, ok := poToDesigner[po]; ok {
 			designer = d
 		}
 		list = append(list, rowInfo{
@@ -89,6 +89,7 @@ func FillReceiptDesignerFromRows(rows [][]string, sheetName, outPath string, poT
 	for _, item := range list {
 		newRow := make([]string, max(len(item.cells), colPIdx+1))
 		copy(newRow, item.cells)
+		newRow[colCIdx] = item.po       // 先清洗 PO，再用它匹配设计师，最后写回干净值
 		newRow[colPIdx] = item.designer // 覆盖 P 列执行设计师
 		for col, val := range newRow {
 			cell, _ := excelize.CoordinatesToCellName(col+1, rowNum)

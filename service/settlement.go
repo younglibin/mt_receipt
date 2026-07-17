@@ -25,7 +25,11 @@ var settlementOutputHeaders = []string{
 
 func BuildSettlementOutputPath(inputPath string) string {
 	prefix := time.Now().Format("20060102_150405")
-	return filepath.Join("output", prefix+"_settlement.xlsx")
+	outDir := GetRuntimePathConfig().WebFileOutput
+	if outDir == "" {
+		outDir = "output"
+	}
+	return filepath.Join(outDir, prefix+"_settlement.xlsx")
 }
 
 func GenerateSettlementSheets(inputPath, outputPath string) error {
